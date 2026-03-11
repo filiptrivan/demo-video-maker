@@ -18,7 +18,8 @@ export function getFFmpegScreenCaptureArgs(fps: number): string[] {
     case 'macos':
       return ['-f', 'avfoundation', '-framerate', String(fps), '-i', '1:none'];
     case 'linux':
-      return ['-f', 'x11grab', '-framerate', String(fps), '-i', ':0.0'];
+      const display = process.env.DISPLAY || ':0.0';
+      return ['-f', 'x11grab', '-framerate', String(fps), '-i', display];
   }
 }
 

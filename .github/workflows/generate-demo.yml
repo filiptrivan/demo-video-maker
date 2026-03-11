@@ -1,0 +1,94 @@
+name: Generate Demo Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Demo description prompt'
+        required: true
+        type: string
+      resolution:
+        description: 'Video resolution (WxH)'
+        required: false
+        default: '1920x1080'
+        type: string
+      output_name:
+        description: 'Output filename (without extension)'
+        required: false
+        default: 'demo'
+        type: string
+      model:
+        description: 'Claude model to use'
+        required: false
+        default: 'claude-sonnet-4-6'
+        type: string
+      debug:
+        description: 'Enable debug logging'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            fluxbox \
+            libxtst6 \
+            libxtst-dev \
+            libx11-dev \
+            libpng++-dev \
+            libxinerama1 \
+            libxrandr2 \
+            xdotool
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Start virtual display
+        run: |
+          WIDTH=$(echo "${{ inputs.resolution }}" | cut -d'x' -f1)
+          HEIGHT=$(echo "${{ inputs.resolution }}" | cut -d'x' -f2)
+
+          Xvfb :99 -screen 0 ${WIDTH}x${HEIGHT}x24 -ac &
+          sleep 2
+
+          DISPLAY=:99 fluxbox &
+          sleep 1
+
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Generate demo video
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          WIDTH=$(echo "${{ inputs.resolution }}" | cut -d'x' -f1)
+          HEIGHT=$(echo "${{ inputs.resolution }}" | cut -d'x' -f2)
+
+          npx tsx src/cli.ts "${{ inputs.prompt }}" \
+            -W "$WIDTH" \
+            -H "$HEIGHT" \
+            -o "${{ inputs.output_name || 'demo' }}.mp4" \
+            -m "${{ inputs.model }}" \
+            ${{ inputs.debug == 'true' && '--debug' || '' }}
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-video-${{ github.run_id }}
+          path: '*.mp4'
+          retention-days: 30
