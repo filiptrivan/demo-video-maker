@@ -61,12 +61,12 @@ jobs:
 
       - name: Verify Claude CLI auth
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           claude --version
           echo "Testing auth..."
           timeout 30 bash -c 'echo "say ok" | claude -p --output-format text' || {
-            echo "::error::Claude CLI auth failed. Make sure ANTHROPIC_API_KEY secret is set correctly."
+            echo "::error::Claude CLI auth failed. Make sure ANTHROPIC_API_KEY secret contains a valid OAuth token."
             exit 1
           }
           echo "Auth OK"
@@ -89,7 +89,7 @@ jobs:
 
       - name: Generate demo video
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           WIDTH=$(echo "${{ inputs.resolution }}" | cut -d'x' -f1)
           HEIGHT=$(echo "${{ inputs.resolution }}" | cut -d'x' -f2)
