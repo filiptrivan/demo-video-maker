@@ -59,6 +59,18 @@ jobs:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Verify Claude CLI auth
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude --version
+          echo "Testing auth..."
+          timeout 30 bash -c 'echo "say ok" | claude -p --output-format text' || {
+            echo "::error::Claude CLI auth failed. Make sure ANTHROPIC_API_KEY secret is set correctly."
+            exit 1
+          }
+          echo "Auth OK"
+
       - name: Install npm dependencies
         run: npm install
 
@@ -88,7 +100,7 @@ jobs:
             -o "${{ inputs.output_name || 'demo' }}.mp4" \
             -m "${{ inputs.model }}" \
             --use-cli \
-            ${{ inputs.debug == 'true' && '--debug' || '' }}
+            --debug
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4

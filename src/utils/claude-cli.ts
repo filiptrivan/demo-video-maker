@@ -85,17 +85,28 @@ export async function callClaudeCli(options: ClaudeCliOptions): Promise<ClaudeCl
   }
 }
 
+const CLI_TIMEOUT_MS = 120_000; // 2 minutes per call
+
 function runClaude(args: string[], options: ClaudeCliOptions, promptFile: string): Promise<ClaudeCliResult> {
   return new Promise((resolve, reject) => {
     // Remove CLAUDECODE env var to allow running claude as a subprocess
     const env = { ...process.env };
     delete env.CLAUDECODE;
 
+    debug('Spawning: claude', args.join(' '));
+
     const proc = spawn('claude', args, {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
     });
+
+    // Timeout to prevent hanging forever in CI
+    const timer = setTimeout(() => {
+      proc.kill('SIGTERM');
+      const stderr = Buffer.concat(errChunks).toString('utf-8').trim();
+      reject(new Error(`claude CLI timed out after ${CLI_TIMEOUT_MS / 1000}s. stderr: ${stderr}`));
+    }, CLI_TIMEOUT_MS);
 
     // Pipe the prompt via stdin
     import('node:fs/promises').then(fsp =>
@@ -109,13 +120,19 @@ function runClaude(args: string[], options: ClaudeCliOptions, promptFile: string
     const errChunks: Buffer[] = [];
 
     proc.stdout.on('data', (data: Buffer) => chunks.push(data));
-    proc.stderr.on('data', (data: Buffer) => errChunks.push(data));
+    proc.stderr.on('data', (data: Buffer) => {
+      errChunks.push(data);
+      // Stream stderr in real-time for CI visibility
+      process.stderr.write(data);
+    });
 
     proc.on('error', (err) => {
+      clearTimeout(timer);
       reject(new Error(`Failed to start claude CLI: ${err.message}`));
     });
 
     proc.on('close', (code) => {
+      clearTimeout(timer);
       const raw = Buffer.concat(chunks).toString('utf-8').trim();
       const stderr = Buffer.concat(errChunks).toString('utf-8').trim();
 
